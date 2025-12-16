@@ -4,13 +4,12 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useDebouncedCallback } from "use-debounce";
+import Link from "next/link";
 
 import { fetchNotes } from "@/lib/api";
 import NoteList from "@/components/NoteList/NoteList";
 import SearchBox from "@/components/SearchBox/SearchBox";
 import Pagination from "@/components/Pagination/Pagination";
-import ModalNote from "@/components/ModalNote/ModalNote";
-import NoteForm from "@/components/NoteForm/NoteForm"; // цей компонент у тебе вже є з минулого дз
 
 type Props = {
   tag?: string;
@@ -22,12 +21,10 @@ export default function NotesClient({ tag }: Props) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-
   // 🔹 DEBOUNCE пошуку
   const debouncedSetSearch = useDebouncedCallback((value: string) => {
     setSearch(value);
-    setPage(1); // при новому пошуку — на першу сторінку
+    setPage(1);
   }, 500);
 
   const handleSearchChange = (value: string) => {
@@ -38,15 +35,6 @@ export default function NotesClient({ tag }: Props) {
     setPage(nextPage);
   };
 
-  const handleOpenModal = () => {
-    setIsModalOpen(true);
-  };
-
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-  };
-
-  // 🔹 Запит нотаток через React Query
   const { data, isLoading, isError } = useQuery({
     queryKey: ["notes", { tag, search, page, perPage: PER_PAGE }],
     queryFn: () => fetchNotes(search, page, PER_PAGE, tag),
@@ -59,13 +47,13 @@ export default function NotesClient({ tag }: Props) {
 
   return (
     <div>
-      {/* Кнопка створення нотатки */}
-      <button onClick={handleOpenModal}>Add note</button>
+      {/* 🔹 Лінк на сторінку створення нотатки */}
+      <Link href="/notes/action/create">Create note</Link>
 
-      {/* Пошук з debounce */}
+      {/* 🔹 Пошук */}
       <SearchBox onSearchChange={handleSearchChange} />
 
-      {/* Список нотаток + пагінація */}
+      {/* 🔹 Список + пагінація */}
       {notes.length > 0 ? (
         <>
           <NoteList notes={notes} />
@@ -77,13 +65,6 @@ export default function NotesClient({ tag }: Props) {
         </>
       ) : (
         <p>No notes found</p>
-      )}
-
-      {/* Модалка для створення нової нотатки */}
-      {isModalOpen && (
-        <ModalNote>
-          <NoteForm onClose={handleCloseModal} />
-        </ModalNote>
       )}
     </div>
   );
