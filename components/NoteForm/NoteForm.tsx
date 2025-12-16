@@ -6,6 +6,8 @@ import { createNote } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { useNoteStore } from "@/lib/store/noteStore";
 import type { Tag } from "@/lib/store/noteStore";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import React from "react";
 
 interface NoteFormProps {
   onClose?: () => void;
@@ -13,31 +15,53 @@ interface NoteFormProps {
 
 export default function NoteForm({ onClose }: NoteFormProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { draft, setDraft, clearDraft } = useNoteStore();
 
-  const formAction = async (formData: FormData) => {
-    const title = String(formData.get("title") ?? "");
-    const content = String(formData.get("content") ?? "");
-    const tag = String(formData.get("tag") ?? "Todo") as Tag;
+  const createNoteMutation = useMutation({
+    mutationFn: createNote,
+    onSuccess: async () => {
+      // ✅ після успішного створення — оновлюємо кеш списку нотаток
+      await queryClient.invalidateQueries({ queryKey: ["notes"] });
 
-    await createNote({ title, content, tag });
+      // ✅ тільки після успіху чистимо draft
+      clearDraft();
 
-    // ✅ тільки після успішного створення
-    clearDraft();
+      // ✅ навігація назад + закриття модалки (якщо є)
+      router.back();
+      onClose?.();
+    },
+  });
 
-    // ✅ повернутися на попередній маршрут
+  const handleSubmit = async (
+    e: React.FormEvent<HTMLFormElement>
+  ): Promise<void> => {
+    e.preventDefault();
+
+    // беремо актуальний глобальний draft (він і так оновлюється onChange)
+    const payload = {
+      title: draft.title.trim(),
+      content: draft.content.trim(),
+      tag: draft.tag as Tag,
+    };
+
+    // за потреби — можна додати мінімальну валідацію
+    // якщо у вас вона не потрібна — видаляй цей блок
+    if (!payload.title || !payload.content) return;
+
+    createNoteMutation.mutate(payload);
+  };
+
+  const handleCancel = (): void => {
+    // ❌ draft НЕ очищаємо
     router.back();
     onClose?.();
   };
 
-  const handleCancel = () => {
-    // ❌ draft НЕ очищаємо
-    router.back(); // ✅ назад
-    onClose?.();
-  };
+  const isPending = createNoteMutation.isPending;
 
   return (
-    <form className={css.form} action={formAction}>
+    <form className={css.form} onSubmit={handleSubmit}>
       <div className={css.formGroup}>
         <label htmlFor="title">Title</label>
         <input
@@ -46,7 +70,10 @@ export default function NoteForm({ onClose }: NoteFormProps) {
           name="title"
           className={css.input}
           value={draft.title}
-          onChange={(e) => setDraft({ title: e.target.value })}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+            setDraft({ title: e.target.value })
+          }
+          disabled={isPending}
         />
       </div>
 
@@ -58,7 +85,10 @@ export default function NoteForm({ onClose }: NoteFormProps) {
           rows={8}
           className={css.textarea}
           value={draft.content}
-          onChange={(e) => setDraft({ content: e.target.value })}
+          onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+            setDraft({ content: e.target.value })
+          }
+          disabled={isPending}
         />
       </div>
 
@@ -69,7 +99,10 @@ export default function NoteForm({ onClose }: NoteFormProps) {
           name="tag"
           className={css.select}
           value={draft.tag}
-          onChange={(e) => setDraft({ tag: e.target.value as Tag })}
+          onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+            setDraft({ tag: e.target.value as Tag })
+          }
+          disabled={isPending}
         >
           <option value="Todo">Todo</option>
           <option value="Work">Work</option>
@@ -85,13 +118,14 @@ export default function NoteForm({ onClose }: NoteFormProps) {
             type="button"
             className={css.cancelButton}
             onClick={handleCancel}
+            disabled={isPending}
           >
             Cancel
           </button>
         )}
 
-        <button type="submit" className={css.submitButton}>
-          Create note
+        <button type="submit" className={css.submitButton} disabled={isPending}>
+          {isPending ? "Creating..." : "Create note"}
         </button>
       </div>
     </form>
