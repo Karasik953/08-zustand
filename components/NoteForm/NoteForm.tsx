@@ -1,55 +1,50 @@
-// src/components/NoteForm/NoteForm.tsx
 "use client";
 
+import React from "react";
 import css from "./NoteForm.module.css";
 import { createNote } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { useNoteStore } from "@/lib/store/noteStore";
 import type { Tag } from "@/lib/store/noteStore";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import React from "react";
 
 interface NoteFormProps {
   onClose?: () => void;
 }
+
+type CreateNotePayload = {
+  title: string;
+  content: string;
+  tag: Tag;
+};
 
 export default function NoteForm({ onClose }: NoteFormProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { draft, setDraft, clearDraft } = useNoteStore();
 
-  const createNoteMutation = useMutation({
-    mutationFn: createNote,
+  const { mutate, isPending } = useMutation({
+    mutationFn: (payload: CreateNotePayload) => createNote(payload),
     onSuccess: async () => {
-      // ✅ після успішного створення — оновлюємо кеш списку нотаток
       await queryClient.invalidateQueries({ queryKey: ["notes"] });
-
-      // ✅ тільки після успіху чистимо draft
       clearDraft();
-
-      // ✅ навігація назад + закриття модалки (якщо є)
       router.back();
       onClose?.();
     },
   });
 
-  const handleSubmit = async (
-    e: React.FormEvent<HTMLFormElement>
-  ): Promise<void> => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>): void => {
     e.preventDefault();
 
-    // беремо актуальний глобальний draft (він і так оновлюється onChange)
-    const payload = {
+    const payload: CreateNotePayload = {
       title: draft.title.trim(),
       content: draft.content.trim(),
-      tag: draft.tag as Tag,
+      tag: draft.tag,
     };
 
-    // за потреби — можна додати мінімальну валідацію
-    // якщо у вас вона не потрібна — видаляй цей блок
     if (!payload.title || !payload.content) return;
 
-    createNoteMutation.mutate(payload);
+    mutate(payload);
   };
 
   const handleCancel = (): void => {
@@ -57,8 +52,6 @@ export default function NoteForm({ onClose }: NoteFormProps) {
     router.back();
     onClose?.();
   };
-
-  const isPending = createNoteMutation.isPending;
 
   return (
     <form className={css.form} onSubmit={handleSubmit}>
